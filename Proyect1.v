@@ -41,7 +41,7 @@ endmodule
 
 //-------------------------------------------------------------------
 module processor( input         clk, reset,
-                  output [31:0] PC,
+                  output reg [31:0] PC, //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! le agregue el reg
                   input  [31:0] instruction,
                   output        WE,
                   output [31:0] address_to_mem,
@@ -54,7 +54,7 @@ module processor( input         clk, reset,
 	wire [31:0] rs1, rs2, SrcB;
 	wire [31:0] immOp;
 	wire [31:0] ALUout;
-	wire zero;
+	wire zero, neg;
 	wire [31:0] PCn, mux3_out, res;
 	wire [1:0] signal_1;
     wire signal_2;
@@ -62,20 +62,17 @@ module processor( input         clk, reset,
 	
 	always @ (posedge clk)
 	begin
-		if (reset) begin
-		    PC = 32'b0;
-		else 
-		    PC = PCn;
-		end	
+		if (reset) PC = 32'b0;
+		else PC = PCn;
 	end
 	
 	reg_file  regfile(instruction[19:15],instruction[24:20],instruction[11:7],res, RegWrite, clk, rs1, rs2);
-	control_unit control_u(instruction, BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUControl, ALUSrc, immControl);
+	control_unit control_u(instruction, neg, BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUControl, ALUSrc, immControl);
 	
 	mux21 mux_1(rs2, immOp, ALUSrc, SrcB);
 	
 	alu  alu_main(rs1, SrcB, ALUControl, ALUout, zero);
-	immdecode immc(instruction, immControl, immOp);
+	immdecode immc(instruction, immControl, immOp, neg);
 	
 	assign signal_1[0] = BranchJalr;
 	assign signal_1[1] = (BranchBeq & zero) | BranchJal;
@@ -121,16 +118,17 @@ module alu (input [31:0] sA,sB,
         endcase
 		
       always @ (*)
-        if (result) zero = 0;
+        if (result) zero = 0; //check if even if the result gives zero (not by branching) it has to give 1 the signal
         else zero  = 1;
 endmodule
 //----------------------------------------------------------------------
 module control_unit (input [31:0] instr, //funct7 [31:25], funct3 [14:12], opcode [6:0]
+                     input neg,
                      output reg BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, 
 					 output reg [2:0] ALUControl,
 					 output reg ALUSrc, immControl);
 					 
-     reg [9:0]concat_code;
+     reg [10:0]concat_code;
 	 wire [6:0] funct7, opcode;
 	 wire [2:0] funct3;
 	 
@@ -162,7 +160,10 @@ module control_unit (input [31:0] instr, //funct7 [31:25], funct3 [14:12], opcod
 						3'b111: concat_code = 11'b000100_011_00; //AND
 					endcase
 			        end
-		7'b0010011: concat_code = 11'b000100_000_11; //ADDI
+		7'b0010011: begin
+		               if (neg) concat_code = 11'b000100_001_11; //ADDI negative immediate number
+					   else concat_code = 11'b000100_000_11; //ADDI positive immediate number
+		            end
 		7'b0001011: concat_code = 11'b000100_010_00; //ADDUQB
 		7'b1100011: concat_code = 11'b001000_001_01; //BEQ
 		7'b0000011: concat_code = 11'b000110_000_11; //LW
@@ -192,30 +193,44 @@ endmodule
 //----------------------------------------------------------------------
 module immdecode(input [31:0] in, //[31:7]
                  input immControl,
-				 output reg [31:0] immOp);
+				 output reg [31:0] immOp,
+				 output reg neg);
 				 
-	wire [6:0] opcode;		
+	wire [6:0] opcode;
+	//wire [11:0]component2;		
 	
 	assign opcode = in[6:0];	 
-
-	always @ (immControl)
+    //assign component2 = in[31:20];
+	always @ (*)
 	begin
+	neg = 1'b0;
+	  if (immControl) begin
 		case(opcode)
-		7'b0110011: immOp = 32'b0; //ADD, SUB, etc
-		7'b0010011: immOp = {in[31:20],20'b0000_0000_0000_0000_0000}; //ADDI
-		7'b0001011: immOp = 32'b0; //ADUQ
-		7'b1100011: immOp = {in[31],in[7],in[30:25],in[11:8],20'b0000_0000_0000_0000_0000}; //BEQ
-		7'b0000011: immOp = {in[31:20],20'b0000_0000_0000_0000_0000}; //LW
-		7'b0100011: immOp = {in[31:25],in[11:7],20'b0000_0000_0000_0000_0000}; //SW
-		7'b0110111: immOp = {in[31:20],20'b0000_0000_0000_0000_0000}; //LUI This one i am not sure
-		7'b1101111: immOp = {in[31],in[19:12],in[20],in[30:21],12'b0000_0000_0000}; //JAL
-		7'b1100111: immOp = {in[31:20],20'b0000_0000_0000_0000_0000}; //JALR
-		7'b0010111: immOp = 32'b0;
+		7'b0110011: immOp = 32'b0; //ADD, SUB, etc (R)
+		7'b0001011: immOp = 32'b0; //ADUQ (R)
+		7'b0010011: begin
+					   if (in[31]) begin //if MSB = 1, negative number 2nd complement
+						  //component2 = ~component2 + 1'b1;
+						  immOp = {20'b0000_0000_0000_0000_0000, ~(in[31:20])+1'b1}; //ADDI (I)
+						  neg = 1'b1;
+					   end else begin
+		                      immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //ADDI (I)
+						      neg = 1'b0;
+		                   end
+					end
+		7'b0110111: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //LUI This one i am not sure (I)
+		7'b1100111: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //JALR (I)
+		7'b0000011: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //LW (I)		
+		7'b1100011: immOp = {20'b0000_0000_0000_0000_0000, in[31],in[7],in[30:25],in[11:8]}; //BEQ (B)
+		7'b0100011: immOp = {20'b0000_0000_0000_0000_0000, in[31:25],in[11:7]}; //SW (S)
+		7'b1101111: immOp = {12'b0000_0000_0000, in[31],in[19:12],in[20],in[30:21]}; //JAL (J)
+		7'b0010111: immOp = 32'b0; //AUIPC (R) ?
 		default: immOp = 32'b0;
 		endcase
+	  end
 	end
 
-endmodule		
+endmodule	
 //------------------------------------------------------------------------
 module reg_file (input [4:0] A1, A2, A3,
             input [31:0] WD3,
@@ -267,13 +282,7 @@ module test();
   initial begin
     $dumpfile("test");
     $dumpvars;
-	clk=0;
     reset=0;
-	data_to_mem=0;
-	address_to_mem=0;
-	write_enable=0;
-	#10;
-	write_enable=1;
     #160 $finish;
   end
 

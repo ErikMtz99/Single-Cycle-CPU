@@ -1,9 +1,10 @@
 module control_unit (input [31:0] instr, //funct7 [31:25], funct3 [14:12], opcode [6:0]
+                     input neg,
                      output reg BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, 
 					 output reg [2:0] ALUControl,
 					 output reg ALUSrc, immControl);
 					 
-     reg [9:0]concat_code;
+     reg [10:0]concat_code;
 	 wire [6:0] funct7, opcode;
 	 wire [2:0] funct3;
 	 
@@ -35,7 +36,10 @@ module control_unit (input [31:0] instr, //funct7 [31:25], funct3 [14:12], opcod
 						3'b111: concat_code = 11'b000100_011_00; //AND
 					endcase
 			        end
-		7'b0010011: concat_code = 11'b000100_000_11; //ADDI
+		7'b0010011: begin
+		               if (neg) concat_code = 11'b000100_001_11; //ADDI negative immediate number
+					   else concat_code = 11'b000100_000_11; //ADDI positive immediate number
+		            end
 		7'b0001011: concat_code = 11'b000100_010_00; //ADDUQB
 		7'b1100011: concat_code = 11'b001000_001_01; //BEQ
 		7'b0000011: concat_code = 11'b000110_000_11; //LW
@@ -65,21 +69,27 @@ endmodule
 
 module test();
     reg [31:0] instr; //funct7 [31:25], funct3 [14:12], opcode [6:0]
+	reg neg;
     wire BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite; 
 	wire [2:0] ALUControl;
 	wire ALUSrc, immControl;
 	
-	wire [31:25] funct7;
-	wire [2:0] funct3;
-	wire [6:0] opcode;
+	//wire [31:25] funct7;
+	//wire [2:0] funct3;
+	//wire [6:0] opcode;
   
-control_unit control_unit_test(instr, BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUControl, ALUSrc, immControl);  
+control_unit control_unit_test(instr, neg, BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUControl, ALUSrc, immControl);  
   initial begin
     $dumpfile("test");
     $dumpvars;
-	opcode = 7'b0110011;
+	instr = 32'b00000000000000000000000000110011; //add
+	neg = 0;
 	#20;
-	opcode = 7'b0001011;
+	neg = 1;
+	instr = 32'b00000000000000000000000000010011; //addi
+	#20;
+	neg = 0;
+	instr = 32'b00000000000000000000000000010011; //addi
 	#20;
     #160 $finish;
   end
