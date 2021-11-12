@@ -22,7 +22,7 @@ module alu (input [31:0] sA,sB,
         endcase
 		
       always @ (*)
-        if (result) zero = 0;
+        if (result) zero = 0; //check if even if the result gives zero (not by branching) it has to give 1 the signal
         else zero  = 1;
 endmodule
 
