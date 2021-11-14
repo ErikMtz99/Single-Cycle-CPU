@@ -86,10 +86,11 @@ module processor( input         clk, reset,
     
 	mux21 mux_3(ALUout, sum_signal_1, signal_2, mux3_out);
 	mux21 mux_4(mux3_out, data_from_mem, MemToReg, res);
-
 	
+	assign WE = MemWrite;
+	assign address_to_mem = ALUout;
+	assign data_to_mem = rs2;
 
-	
 	
 endmodule
 
