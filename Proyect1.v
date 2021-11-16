@@ -49,13 +49,13 @@ module processor( input         clk, reset,
                   input  [31:0] data_from_mem //WD3
                 );
     //... write your code here ...
-	wire BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUSrc, immControl;
+	wire BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUSrc, immControl, s_auipc;
     wire [2:0] ALUControl;
 	wire [31:0] rs1, rs2, SrcB;
 	wire [31:0] immOp;
 	wire [31:0] ALUout;
 	wire zero, neg;
-	wire [31:0] PCn, mux3_out, res;
+	wire [31:0] PCn, mux3_out, res, res_new;
 	wire [1:0] signal_1;
     wire signal_2;
 	wire [31:0] sum_signal_1, sum_signal_2;
@@ -66,8 +66,8 @@ module processor( input         clk, reset,
 		else PC = PCn;
 	end
 	
-	reg_file  regfile(instruction[19:15],instruction[24:20],instruction[11:7],res, RegWrite, clk, rs1, rs2);
-	control_unit control_u(instruction, neg, BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUControl, ALUSrc, immControl);
+	reg_file  regfile(instruction[19:15],instruction[24:20],instruction[11:7],res_new, RegWrite, clk, rs1, rs2);
+	control_unit control_u(instruction, neg, BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, ALUControl, ALUSrc, immControl, s_auipc);
 	
 	mux21 mux_1(rs2, immOp, ALUSrc, SrcB);
 	
@@ -83,9 +83,10 @@ module processor( input         clk, reset,
 	assign sum_signal_2 = immOp +PC;
 	
 	mux31 mux_2(sum_signal_1,ALUout,sum_signal_2,signal_1,PCn); //y goes to instruction memory!!
-    
+	
 	mux21 mux_3(ALUout, sum_signal_1, signal_2, mux3_out);
 	mux21 mux_4(mux3_out, data_from_mem, MemToReg, res);
+	mux21 mux_extra(res,sum_signal_2,s_auipc,res_new); //This is for the instruction AUIPC
 	
 	assign WE = MemWrite;
 	assign address_to_mem = ALUout;
@@ -127,9 +128,9 @@ module control_unit (input [31:0] instr, //funct7 [31:25], funct3 [14:12], opcod
                      input neg,
                      output reg BranchJalr, BranchJal, BranchBeq, RegWrite, MemToReg, MemWrite, 
 					 output reg [2:0] ALUControl,
-					 output reg ALUSrc, immControl);
+					 output reg ALUSrc, immControl,s_auipc);
 					 
-     reg [10:0]concat_code;
+     reg [11:0]concat_code;
 	 wire [6:0] funct7, opcode;
 	 wire [2:0] funct3;
 	 
@@ -145,49 +146,50 @@ module control_unit (input [31:0] instr, //funct7 [31:25], funct3 [14:12], opcod
 					case (funct3)
 						3'b000: begin
 								case(funct7)
-									7'b0000000: concat_code = 11'b000100_000_00; //ADD
-									7'b0100000: concat_code = 11'b000100_001_00; //SUB
+									7'b0000000: concat_code = 12'b000100_000_00_0; //ADD
+									7'b0100000: concat_code = 12'b000100_001_00_0; //SUB
 								endcase
 								end
-						3'b001: concat_code = 11'b000000_000_00; //SLL
-						3'b010: concat_code = 11'b000100_100_00; //SLT
+						3'b001: concat_code = 12'b000000_000_00_0; //SLL
+						3'b010: concat_code = 12'b000100_100_00_0; //SLT
 						3'b101: begin
 						        case(funct7)
-									7'b0000000: concat_code = 11'b000000_000_00; //SRL
-									7'b0100000: concat_code = 11'b000000_000_00; //SRA
+									7'b0000000: concat_code = 12'b000000_000_00_0; //SRL
+									7'b0100000: concat_code = 12'b000000_000_00_0; //SRA
 								endcase
 						        end
 						
-						3'b111: concat_code = 11'b000100_011_00; //AND
+						3'b111: concat_code = 12'b000100_011_00_0; //AND
 					endcase
 			        end
 		7'b0010011: begin
-		               if (neg) concat_code = 11'b000100_001_11; //ADDI negative immediate number
-					   else concat_code = 11'b000100_000_11; //ADDI positive immediate number
+		               if (neg) concat_code = 12'b000100_001_11_0; //ADDI negative immediate number
+					   else concat_code = 12'b000100_000_11_0; //ADDI positive immediate number
 		            end
-		7'b0001011: concat_code = 11'b000100_010_00; //ADDUQB
-		7'b1100011: concat_code = 11'b001000_001_01; //BEQ
-		7'b0000011: concat_code = 11'b000110_000_11; //LW
-		7'b0100011: concat_code = 11'b000001_000_11; //SW
-		7'b0110111: concat_code = 11'b000100_101_11; //LUI
-		7'b1101111: concat_code = 11'b010100_000_01; //JAL
-		7'b1100111: concat_code = 11'b100100_000_11; //JALR
-		7'b0010111: concat_code = 11'b000000_000_00; //AUIPC
-        default: concat_code = 11'b000000_000_00;
+		7'b0001011: concat_code = 12'b000100_010_00_0; //ADDUQB
+		7'b1100011: concat_code = 12'b001000_001_01_0; //BEQ
+		7'b0000011: concat_code = 12'b000110_000_11_0; //LW
+		7'b0100011: concat_code = 12'b000001_000_11_0; //SW
+		7'b0110111: concat_code = 12'b000100_101_11_0; //LUI
+		7'b1101111: concat_code = 12'b010100_000_01_0; //JAL
+		7'b1100111: concat_code = 12'b100100_000_11_0; //JALR
+		7'b0010111: concat_code = 12'b000100_000_01_1; //AUIPC
+        default: concat_code = 12'b000000_000_00_0;
         endcase		
 		end
 	 
 	 always @ (*) 
 	 begin
-	 BranchJalr = concat_code[10];
-	 BranchJal = concat_code[9];
-	 BranchBeq = concat_code[8];
-	 RegWrite = concat_code[7];
-	 MemToReg = concat_code[6];
-	 MemWrite = concat_code[5];
-	 ALUControl = concat_code[4:2];
-	 ALUSrc = concat_code[1];
-	 immControl = concat_code[0];
+	 BranchJalr = concat_code[11];
+	 BranchJal = concat_code[10];
+	 BranchBeq = concat_code[9];
+	 RegWrite = concat_code[8];
+	 MemToReg = concat_code[7];
+	 MemWrite = concat_code[6];
+	 ALUControl = concat_code[5:3];
+	 ALUSrc = concat_code[2];
+	 immControl = concat_code[1];
+	 s_auipc = concat_code[0];
 	 end
 	 
 endmodule
@@ -225,13 +227,13 @@ module immdecode(input [31:0] in, //[31:7]
 		7'b1100011: immOp = {20'b0000_0000_0000_0000_0000, in[31],in[7],in[30:25],in[11:8]}; //BEQ (B)
 		7'b0100011: immOp = {20'b0000_0000_0000_0000_0000, in[31:25],in[11:7]}; //SW (S)
 		7'b1101111: immOp = {12'b0000_0000_0000, in[31],in[19:12],in[20],in[30:21]}; //JAL (J)
-		7'b0010111: immOp = 32'b0; //AUIPC (R) ?
+		7'b0010111: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //AUIPC (R) ?
 		default: immOp = 32'b0;
 		endcase
 	  end
 	end
 
-endmodule	
+endmodule		
 //------------------------------------------------------------------------
 module reg_file (input [4:0] A1, A2, A3,
             input [31:0] WD3,
