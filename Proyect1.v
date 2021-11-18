@@ -18,8 +18,8 @@ module data_mem (input clk, we,
 	reg [31:0] RAM[63:0];
 
 	initial begin
-		$readmemh ("Martinez_Erik_prog1.hex",RAM,0,37);
-		//$readmemh ("memfile_data.hex",RAM,0,63);
+		//$readmemh ("Martinez_Erik_prog1.hex",RAM,0,37);
+		$readmemh ("memfile_data.hex",RAM,0,36);
 	end
 
 	assign rd=RAM[address[31:2]]; // word aligned
@@ -35,7 +35,8 @@ module inst_mem (input  [5:0]  address, //I can change this input value to suppo
 
 	reg [31:0] RAM[63:0];
 	initial begin
-		$readmemh ("Martinez_Erik_prog1.hex",RAM,0,37);
+		$readmemh ("Martinez_Erik_prog1.hex",RAM,0,49);
+	    //$readmemh ("prueba1hex.hex",RAM,0,2);
 		//$readmemh ("memfile_inst.hex",RAM,0,63);
 	end
 	assign rd=RAM[address]; // word aligned
@@ -259,8 +260,8 @@ module mux21 (input[31:0] d0, d1,
               input select,
               output reg [31:0] y);
    always @ (*)
-	if (select) y = d0;
-        else y = d1;
+	if (select) y = d1;
+        else y = d0;
 endmodule
 
 //------------------------------------------------------------------------
