@@ -18,7 +18,8 @@ module data_mem (input clk, we,
 	reg [31:0] RAM[63:0];
 
 	initial begin
-		$readmemh ("memfile_data.hex",RAM,0,63);
+		$readmemh ("Martinez_Erik_prog1.hex",RAM,0,37);
+		//$readmemh ("memfile_data.hex",RAM,0,63);
 	end
 
 	assign rd=RAM[address[31:2]]; // word aligned
@@ -34,14 +35,15 @@ module inst_mem (input  [5:0]  address, //I can change this input value to suppo
 
 	reg [31:0] RAM[63:0];
 	initial begin
-		$readmemh ("memfile_inst.hex",RAM,0,63);
+		$readmemh ("Martinez_Erik_prog1.hex",RAM,0,37);
+		//$readmemh ("memfile_inst.hex",RAM,0,63);
 	end
 	assign rd=RAM[address]; // word aligned
 endmodule
 
 //-------------------------------------------------------------------
 module processor( input         clk, reset,
-                  output reg [31:0] PC, //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! le agregue el reg
+                  output reg [31:0] PC = 32'b0, //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! le agregue el reg
                   input  [31:0] instruction,
                   output        WE,
                   output [31:0] address_to_mem,
@@ -79,7 +81,7 @@ module processor( input         clk, reset,
 	
 	assign signal_2 = BranchJal | BranchJalr;
 	
-	assign sum_siganl_1 = PC + 4;
+	assign sum_signal_1 = PC + 4;
 	assign sum_signal_2 = immOp +PC;
 	
 	mux31 mux_2(sum_signal_1,ALUout,sum_signal_2,signal_1,PCn); //y goes to instruction memory!!
@@ -285,11 +287,13 @@ module test();
   initial begin
     $dumpfile("test");
     $dumpvars;
+	clk=0;
     reset=0;
     #160 $finish;
-  end
 
+  end
   always #1 clk = ~clk;
+
   //always @(x) $display( "The value of x was changed. Time=%3d, x=%b. Inputs: sA=%b, sB=%b, alu=%b.",$time, x,sA,sB,c);
 endmodule
 		
