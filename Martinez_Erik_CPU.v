@@ -18,7 +18,6 @@ module data_mem (input clk, we,
 	reg [31:0] RAM[63:0];
 
 	initial begin
-		//$readmemh ("Martinez_Erik_prog1.hex",RAM,0,37);
 		$readmemh ("memfile_data.hex",RAM,0,36);
 	end
 
@@ -35,9 +34,8 @@ module inst_mem (input  [5:0]  address, //I can change this input value to suppo
 
 	reg [31:0] RAM[63:0];
 	initial begin
-		$readmemh ("Martinez_Erik_prog1.hex",RAM,0,49);
+		$readmemh ("Martinez_Erik_prog1.hex",RAM,0,47);
 	    //$readmemh ("prueba1hex.hex",RAM,0,2);
-		//$readmemh ("memfile_inst.hex",RAM,0,63);
 	end
 	assign rd=RAM[address]; // word aligned
 endmodule
@@ -116,7 +114,7 @@ module alu (input [31:0] sA,sB,
 				result[7:0] =  sA[7:0] +  sB[7:0];
 			 end
 		  3: result = sA & sB; //AND
-		  4: result = sA < sB; //LESS THAN
+		  4: result = $signed(sA) < $signed(sB); //LESS THAN
 		  5: result = {sB[31:12],12'b0000_0000_0000}; //THIS IS FOR LOAD UPPER INMEDIATE
 		  6: result = sA << sB; //shift left //fix!
 		  7: result = sA >> sB; //shift right //fix!
@@ -215,23 +213,14 @@ module immdecode(input [31:0] in, //[31:7]
 		case(opcode)
 		7'b0110011: immOp = 32'b0; //ADD, SUB, etc (R)
 		7'b0001011: immOp = 32'b0; //ADUQ (R)
-		7'b0010011: begin
-					   if (in[31]) begin //if MSB = 1, negative number 2nd complement
-						  //component2 = ~component2 + 1'b1;
-						  immOp = {20'b0000_0000_0000_0000_0000, ~(in[31:20])+1'b1}; //ADDI (I)
-						  neg = 1'b1;
-					   end else begin
-		                      immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //ADDI (I)
-						      neg = 1'b0;
-		                   end
-					end
-		7'b0110111: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //LUI This one i am not sure (I)
-		7'b1100111: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //JALR (I)
-		7'b0000011: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //LW (I)		
-		7'b1100011: immOp = {20'b0000_0000_0000_0000_0000, in[31],in[7],in[30:25],in[11:8]}; //BEQ (B)
-		7'b0100011: immOp = {20'b0000_0000_0000_0000_0000, in[31:25],in[11:7]}; //SW (S)
-		7'b1101111: immOp = {12'b0000_0000_0000, in[31],in[19:12],in[20],in[30:21]}; //JAL (J)
-		7'b0010111: immOp = {20'b0000_0000_0000_0000_0000, in[31:20]}; //AUIPC (R) ?
+		7'b0010011: immOp = {{21{in[31]}}, in[30:20]}; //ADDI (I)
+		7'b1100111: immOp = {{21{in[31]}}, in[30:20]}; //JALR (I)
+		7'b0000011: immOp = {{21{in[31]}}, in[30:20]}; //LW (I)		
+		7'b0100011: immOp = {{21{in[31]}}, in[30:25],in[11:8], in[7]}; //SW (S)
+		7'b1100011: immOp = {{20{in[31]}}, in[7],in[30:25],in[11:8],1'b0}; //BEQ (B)
+		7'b1101111: immOp = {{12{in[31]}}, in[19:12],in[20],in[30:25], in[24:21], 1'b0}; //JAL (J)
+		7'b0110111: immOp = {in[31], in[30:20], in[19:12], 12'b0}; //LUI (U)
+		7'b0010111: immOp = {in[31], in[30:20], in[19:12], 12'b0}; //AUIPC (U) 
 		default: immOp = 32'b0;
 		endcase
 	  end
@@ -257,13 +246,16 @@ module reg_file (input [4:0] A1, A2, A3,
 	 always @ (posedge clk) // Write port
 	    begin
 	    if (WE3) begin
+		   if (A3 != 0) begin
 		    rf[A3] <= WD3;
+		   end
 		end	
         $display("------------------------------");
 		for(i=0;i<32;i=i+1)begin
 		   $display("%d %h", i, rf[i]);
 		end
 		end
+		
 endmodule
 //------------------------------------------------------------------------
 module mux21 (input[31:0] d0, d1,
@@ -300,7 +292,7 @@ module test();
     $dumpvars;
 	clk=0;
     reset=0;
-    #160 $finish;
+    #20000 $finish;
   end
   always #1 clk = ~clk;
 
